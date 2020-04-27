@@ -12,6 +12,7 @@ DWORD RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD dwRva)
 	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);
 	if (pSection == NULL)
 	{
+		ATLASSERT(FALSE);
 		return 0;
 	}
 	for (DWORD i = 0; i < nCount; i++, pSection++)
@@ -21,10 +22,11 @@ DWORD RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD dwRva)
 			return dwRva - (pSection->VirtualAddress - pSection->PointerToRawData);
 		}
 	}
+	ATLASSERT(FALSE);
 	return 0;
 }
 
-BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewCrtDllName)
+BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewCrtDllName, LPCSTR pFirstFuncName)
 {
 	BOOL bResult = FALSE;
 	CStringA strOldDllTitleName = GetFileTitleName(pDllName);
@@ -34,6 +36,44 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		CStringA strNewDllName = pApiSetTarget->GetAt(0);
 		if (strNewDllName.GetLength() <= (int)strlen(pDllName))
 		{
+			if (!strNewDllName.CompareNoCase("kernelbase.dll"))
+			{
+				if (pApiSetTarget->GetCount() == 1)
+				{
+					BOOL bFindNewDllName = FALSE;
+					static const LPCSTR pszNewDllNames[] = { "kernel32.dll","advapi32.dll" };
+					for (int i = 0; i < _countof(pszNewDllNames); i++)
+					{
+						HMODULE hMod = LoadLibrary(pszNewDllNames[i]);
+						if (hMod)
+						{
+							if (GetProcAddress(hMod, pFirstFuncName))
+							{
+								strNewDllName = pszNewDllNames[i];
+								bFindNewDllName = TRUE;
+							}
+
+							FreeLibrary(hMod);
+							hMod = NULL;
+
+							if (bFindNewDllName)
+							{
+								break;
+							}
+						}
+					}
+
+					if (!bFindNewDllName)
+					{
+						ATLASSERT(FALSE);
+						printf("can not find new dll name for replace \"kernelbase.dll\"!\r\n");
+					}
+				}
+				else
+				{
+					strNewDllName = pApiSetTarget->GetAt(1);
+				}
+			}
 			lstrcpynA(pDllName, strNewDllName, strNewDllName.GetLength() + 1);
 			bResult = TRUE;
 		}
@@ -117,7 +157,21 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 		while (pImageImport->Name)
 		{
 			PCHAR pDllName = (PCHAR)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->Name));
-			TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName);
+
+			if (pImageImport->OriginalFirstThunk)
+			{
+				PIMAGE_THUNK_DATA pFunctionNameThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->OriginalFirstThunk));
+				if (pFunctionNameThunk[0].u1.Ordinal & IMAGE_ORDINAL_FLAG)
+				{
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
+				}
+				else
+				{
+					PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk[0].u1.AddressOfData));
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)pByName->Name);
+				}
+			}
+
 			++pImageImport;
 		}
 	}
@@ -133,7 +187,28 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 		while (pDelay->rvaDLLName && pDelay->rvaIAT && pDelay->rvaINT)
 		{
 			PCHAR pDllName = (PCHAR)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pDelay->rvaDLLName));
-			TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName);
+
+			PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pDelay->rvaINT));
+
+			// 循环IAT项
+			if (pThunk->u1.Function)
+			{
+				if (!IMAGE_SNAP_BY_ORDINAL(pThunk->u1.Ordinal))
+				{
+					// 获取导入表数据
+					PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pThunk->u1.AddressOfData));
+					//ATLTRACE(_T("VA: %08X Hint: %08X, FunctionName: %s\n"), pThunkIAT->u1.Function,pImportName->Hint, pImportName->Name);
+
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)pImportName->Name);
+				}
+				else
+				{
+					DWORD Ordinal = DWORD(IMAGE_ORDINAL(pThunk->u1.Ordinal));
+					//ATLTRACE(_T("VA: %08X Hint:Ord FunctionName:%s.%d\n"), pThunkIAT->u1.Function,DllTitle, Ordinal);
+
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, MAKEINTRESOURCEA(Ordinal));
+				}
+			}
 
 			++pDelay;
 		}

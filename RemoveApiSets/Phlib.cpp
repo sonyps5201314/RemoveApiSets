@@ -111,7 +111,8 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV2(API_SET_NAMESPACE_V2 const * c
 
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
-		auto const name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		name.MakeLower();
 		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
 	}
 	return schema;
@@ -135,7 +136,8 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV4(API_SET_NAMESPACE_V4 const * c
 
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
-		auto const name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		name.MakeLower();
 		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
 	}
 	return schema;
@@ -191,7 +193,8 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV6(API_SET_NAMESPACE_V6 const * c
 
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
-		auto const name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
+		name.MakeLower();
 		auto const hash_name = CString(name_buffer, it->HashedLength / sizeof(WCHAR));
 		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
 		schema->HashedAll->Add(KeyValuePair<CString, ApiSetTarget*>(hash_name, targets));
