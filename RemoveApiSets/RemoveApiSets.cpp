@@ -6,7 +6,7 @@
 
 //https://www.51hint.com/rva-to-file-offset.html
 //RVA 转 文件偏移地址
-DWORD RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD dwRva)
+DWORD_PTR RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD_PTR dwRva)
 {
 	DWORD nCount = pNt->FileHeader.NumberOfSections;
 	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);
@@ -17,7 +17,7 @@ DWORD RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD dwRva)
 	}
 	for (DWORD i = 0; i < nCount; i++, pSection++)
 	{
-		if ((dwRva >= pSection->VirtualAddress) && (dwRva <= (pSection->VirtualAddress + pSection->Misc.VirtualSize)))
+		if ((dwRva >= pSection->VirtualAddress) && (dwRva < (pSection->VirtualAddress + pSection->Misc.VirtualSize)))
 		{
 			return dwRva - (pSection->VirtualAddress - pSection->PointerToRawData);
 		}
