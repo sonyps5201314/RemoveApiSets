@@ -34,4 +34,12 @@
 #include <atlcoll.h>
 
 //JKSDK
+#define __DO_NOT_USE_JKSDK_OUTPUTDEBUGSTRING__
+#define __DO_NOT_USE_JKSDK_TRACE__
+#define __DO_NOT_USE_JKSDK_ASSERT__
+#define __DO_NOT_USE_COM__
+#define __DO_NOT_USE_ATL_CSTRING__
+#define __DO_NOT_USE_JKSDK_CDLG__
+#define __DO_NOT_USE_JKSDK_AUTOLOCK__
+#define __DO_NOT_USE_JKSDK_SHOWCALLSTACKTRACK_SOURCEFILEPATHMAPPINGS__
 #include "F:\MyCppProjects\JKSDK\Lib\JKSDK.H"
