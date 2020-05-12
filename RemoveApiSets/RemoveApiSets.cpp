@@ -85,17 +85,21 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	}
 	else
 	{
-		if (!_strnicmp(pDllName, "api-ms-win-crt-", _countof("api-ms-win-crt-") - 1))
+		static const LPCSTR pszDllNames[] = { "api-ms-win-crt-","VCRUNTIME140.DLL" };
+		for (int i = 0; i < _countof(pszDllNames); i++)
 		{
-			if (strNewCrtDllName.GetLength() <= (int)strlen(pDllName))
+			if (!_strnicmp(pDllName, pszDllNames[i], strlen(pszDllNames[i])))
 			{
-				lstrcpynA(pDllName, strNewCrtDllName, strNewCrtDllName.GetLength() + 1);
-				bResult = TRUE;
-			}
-			else
-			{
-				printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewCrtDllName);
-				ATLASSERT(FALSE);
+				if (strNewCrtDllName.GetLength() <= (int)strlen(pDllName))
+				{
+					lstrcpynA(pDllName, strNewCrtDllName, strNewCrtDllName.GetLength() + 1);
+					bResult = TRUE;
+				}
+				else
+				{
+					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewCrtDllName);
+					ATLASSERT(FALSE);
+				}
 			}
 		}
 	}
