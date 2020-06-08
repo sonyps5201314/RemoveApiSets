@@ -88,7 +88,11 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	}
 	else
 	{
-		static const LPCSTR pszDllNames[] = { "api-ms-win-crt-","VCRUNTIME140.DLL" };
+		static const LPCSTR pszDllNames[] = { "api-ms-win-crt-","vcruntime140.dll"
+#if _M_AMD64
+			,"vcruntime140_1.dll"
+#endif
+		};
 		for (int i = 0; i < _countof(pszDllNames); i++)
 		{
 			if (!_strnicmp(pDllName, pszDllNames[i], strlen(pszDllNames[i])))
