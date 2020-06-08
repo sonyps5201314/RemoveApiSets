@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "Phlib.h"
+#include "Misc.h"
 #include <delayimp.h>
 
 //https://www.51hint.com/rva-to-file-offset.html
