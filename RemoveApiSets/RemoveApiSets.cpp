@@ -27,7 +27,7 @@ DWORD_PTR RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD_PTR dwRva)
 	return 0;
 }
 
-BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewCrtDllName, LPCSTR pFirstFuncName)
+BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName, LPCSTR pFirstFuncName)
 {
 	BOOL bResult = FALSE;
 	CStringA strOldDllTitleName = GetFileTitleName(pDllName);
@@ -91,14 +91,45 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		{
 			if (!_strnicmp(pDllName, pszDllNames[i], strlen(pszDllNames[i])))
 			{
-				if (strNewCrtDllName.GetLength() <= (int)strlen(pDllName))
+				if (strNewVcrDllName.GetLength() <= (int)strlen(pDllName))
 				{
-					lstrcpynA(pDllName, strNewCrtDllName, strNewCrtDllName.GetLength() + 1);
+					lstrcpynA(pDllName, strNewVcrDllName, strNewVcrDllName.GetLength() + 1);
+					bResult = TRUE;
+					break;
+				}
+				else
+				{
+					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcrDllName);
+					ATLASSERT(FALSE);
+				}
+			}
+		}
+
+		if (bResult == FALSE)
+		{
+			if (!_stricmp(pDllName, "MSVCP140.dll"))
+			{
+				if (strNewVcpDllName.GetLength() <= (int)strlen(pDllName))
+				{
+					lstrcpynA(pDllName, strNewVcpDllName, strNewVcpDllName.GetLength() + 1);
 					bResult = TRUE;
 				}
 				else
 				{
-					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewCrtDllName);
+					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcpDllName);
+					ATLASSERT(FALSE);
+				}
+			}
+			else if (!_stricmp(pDllName, "CONCRT140.dll"))
+			{
+				if (strNewConCrtDllName.GetLength() <= (int)strlen(pDllName))
+				{
+					lstrcpynA(pDllName, strNewConCrtDllName, strNewConCrtDllName.GetLength() + 1);
+					bResult = TRUE;
+				}
+				else
+				{
+					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewConCrtDllName);
 					ATLASSERT(FALSE);
 				}
 			}
@@ -107,7 +138,7 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	return bResult;
 }
 
-BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewCrtDllName)
+BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName)
 {
 	BOOL bRet = FALSE;
 	HANDLE hFile;
@@ -168,12 +199,12 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 				PIMAGE_THUNK_DATA pFunctionNameThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->OriginalFirstThunk));
 				if (pFunctionNameThunk[0].u1.Ordinal & IMAGE_ORDINAL_FLAG)
 				{
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
 				}
 				else
 				{
 					PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk[0].u1.AddressOfData));
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)pByName->Name);
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)pByName->Name);
 				}
 			}
 
@@ -204,14 +235,14 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 					PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pThunk->u1.AddressOfData));
 					//ATLTRACE(_T("VA: %08X Hint: %08X, FunctionName: %s\n"), pThunkIAT->u1.Function,pImportName->Hint, pImportName->Name);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, (LPCSTR)pImportName->Name);
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)pImportName->Name);
 				}
 				else
 				{
 					DWORD Ordinal = DWORD(IMAGE_ORDINAL(pThunk->u1.Ordinal));
 					//ATLTRACE(_T("VA: %08X Hint:Ord FunctionName:%s.%d\n"), pThunkIAT->u1.Function,DllTitle, Ordinal);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewCrtDllName, MAKEINTRESOURCEA(Ordinal));
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, MAKEINTRESOURCEA(Ordinal));
 				}
 			}
 
@@ -247,7 +278,7 @@ int _tmain(int argc, _TCHAR *argv[])
 
 	ApiSetSchema* pApiSetSchema = GetApiSetSchema();
 
-	RemoveApiSets(argv[1], pApiSetSchema, _T("MSVCR140_.dll"));
+	RemoveApiSets(argv[1], pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
 
 	CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* pInfos = pApiSetSchema->GetAll();
 	delete pInfos;
