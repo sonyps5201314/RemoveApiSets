@@ -30,12 +30,14 @@ DWORD_PTR RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD_PTR dwRva)
 BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName, LPCSTR pFirstFuncName)
 {
 	BOOL bResult = FALSE;
+
+	int nDllNameLen = (int)strlen(pDllName);
 	CStringA strOldDllTitleName = GetFileTitleName(pDllName);
 	ApiSetTarget* pApiSetTarget = pApiSetSchema->Lookup(strOldDllTitleName);
 	if (pApiSetTarget)
 	{
 		CStringA strNewDllName = pApiSetTarget->GetAt(0);
-		if (strNewDllName.GetLength() <= (int)strlen(pDllName))
+		if (strNewDllName.GetLength() <= nDllNameLen)
 		{
 			if (!strNewDllName.CompareNoCase("kernelbase.dll"))
 			{
@@ -91,7 +93,7 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		{
 			if (!_strnicmp(pDllName, pszDllNames[i], strlen(pszDllNames[i])))
 			{
-				if (strNewVcrDllName.GetLength() <= (int)strlen(pDllName))
+				if (strNewVcrDllName.GetLength() <= nDllNameLen)
 				{
 					lstrcpynA(pDllName, strNewVcrDllName, strNewVcrDllName.GetLength() + 1);
 					bResult = TRUE;
@@ -107,22 +109,32 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 
 		if (bResult == FALSE)
 		{
-			if (!_stricmp(pDllName, "MSVCP140.dll"))
+			static const LPCSTR pszDllNames[] = { "msvcp140.dll","msvcp140_1.dll" };
+			//我们的CRT中msvcp140_2模块是静态链接的，所以暂时不支持替换msvcp140_2.dll
+			for (int i = 0; i < _countof(pszDllNames); i++)
 			{
-				if (strNewVcpDllName.GetLength() <= (int)strlen(pDllName))
+				if (!_stricmp(pDllName, pszDllNames[i]))
 				{
-					lstrcpynA(pDllName, strNewVcpDllName, strNewVcpDllName.GetLength() + 1);
-					bResult = TRUE;
-				}
-				else
-				{
-					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcpDllName);
-					ATLASSERT(FALSE);
+					if (strNewVcpDllName.GetLength() <= nDllNameLen)
+					{
+						lstrcpynA(pDllName, strNewVcpDllName, strNewVcpDllName.GetLength() + 1);
+						bResult = TRUE;
+						break;
+					}
+					else
+					{
+						printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcpDllName);
+						ATLASSERT(FALSE);
+					}
 				}
 			}
-			else if (!_stricmp(pDllName, "CONCRT140.dll"))
+		}
+
+		if (bResult == FALSE)
+		{
+			if (!_stricmp(pDllName, "concrt140.dll"))
 			{
-				if (strNewConCrtDllName.GetLength() <= (int)strlen(pDllName))
+				if (strNewConCrtDllName.GetLength() <= nDllNameLen)
 				{
 					lstrcpynA(pDllName, strNewConCrtDllName, strNewConCrtDllName.GetLength() + 1);
 					bResult = TRUE;
