@@ -14,7 +14,13 @@ RemoveApiSets.exe <exe/dll file or fold that contains all exe/dll files you need
 or run RemoveApiSets.exe with no parameters,and then dragdrop the dst file or directory to the console window.
 
 ## tip:
-the 32bit RemoveApiSets.exe can only convert the 32bit executable file, and 64bit RemoveApiSets.exe can only convert the 64bit executable file.
+the 32bit RemoveApiSets.exe can only convert the 32bit executable files, and 64bit RemoveApiSets.exe can only convert the 64bit executable files.
+
+## compare images:
+Before![Before](images/before.png)      After![After](images/after.png)
+
+## LEGAL STATEMENT:
+Modification of copyrighted executables may be subject to legal risks. Please do not use this software for illegal activities.
 
 ## refer to:
 https://github.com/lucasg/Dependencies.git
