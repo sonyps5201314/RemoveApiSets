@@ -325,7 +325,7 @@ int _tmain(int argc, _TCHAR *argv[])
 	}
 	else
 	{
-		_tprintf(_T("请输入文件(夹)路径：\r\n"));
+		_tprintf(_T("Please input the file (folder) path:\r\n"));
 		TCHAR szBuf[1024];
 		_getts_s(szBuf);
 		PathUnquoteSpaces(szBuf);
@@ -364,7 +364,7 @@ int _tmain(int argc, _TCHAR *argv[])
 	delete pApiSetSchema;
 	pApiSetSchema = NULL;
 
-	_tprintf(_T("所有符合条件的文件已全部转换完成！\r\n"));
+	_tprintf(_T("All eligible files have been converted!\r\n"));
 	getchar();
 	return 0;
 }
