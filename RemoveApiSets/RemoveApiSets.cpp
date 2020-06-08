@@ -174,15 +174,31 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
 	{
 		SetLastError(ERROR_BAD_EXE_FORMAT);
-		return FALSE;
+		goto __UNMAP_PE__;
 	}
 
 	Nt_headers = (PIMAGE_NT_HEADERS) & ((const unsigned char *)(lpImageBase))[dos_header->e_lfanew];
 	if (Nt_headers->Signature != IMAGE_NT_SIGNATURE)
 	{
 		SetLastError(ERROR_BAD_EXE_FORMAT);
-		return FALSE;
+		goto __UNMAP_PE__;
 	}
+
+#if _M_IX86
+	if (Nt_headers->FileHeader.Machine != IMAGE_FILE_MACHINE_I386)
+	{
+		SetLastError(ERROR_INVALID_MODULETYPE);
+		goto __UNMAP_PE__;
+	}
+#elif _M_AMD64
+	if (Nt_headers->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+	{
+		SetLastError(ERROR_INVALID_MODULETYPE);
+		goto __UNMAP_PE__;
+	}
+#else
+	ATLASSERT(FALSE);//未支持处理的架构类型
+#endif
 
 	//替换IAT中的条目
 	IMAGE_DATA_DIRECTORY ImageDataDirectory_Import = Nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
@@ -250,6 +266,7 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 		}
 	}
 
+__UNMAP_PE__:
 	if (lpImageBase)
 	{
 		UnmapViewOfFile(lpImageBase);
@@ -268,23 +285,70 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 	return bRet;
 }
 
+BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM lParam)
+{
+	ApiSetSchema* pApiSetSchema = (ApiSetSchema*)lParam;
+	RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
+	return TRUE;
+}
+
+BOOL CALLBACK DirectoryEnumProc(LPWIN32_FIND_DATA lpFfd, LPCTSTR FileFullPath, LPARAM lParam)
+{
+	return DirectoryEnumProc_Internal(FileFullPath, lpFfd->cFileName, lParam);
+}
 
 int _tmain(int argc, _TCHAR *argv[])
 {
-	if (argc < 2)
+	CString strDir_or_File;
+
+	_tsetlocale(LC_ALL, _T(".ACP"));
+	if (argc == 2 && (IsDir(argv[1]) || IsFile(argv[1])))
 	{
-		return 1;
+		strDir_or_File = argv[1];
+	}
+	else
+	{
+		_tprintf(_T("请输入文件(夹)路径：\r\n"));
+		TCHAR szBuf[1024];
+		_getts_s(szBuf);
+		PathUnquoteSpaces(szBuf);
+		if (IsDir(szBuf) || IsFile(szBuf))
+		{
+			strDir_or_File = szBuf;
+		}
+		else
+		{
+			return 1;
+		}
+	}
+
+	if (IsDir(strDir_or_File))
+	{
+		if (strDir_or_File.Right(1) != _T('\\'))
+		{
+			strDir_or_File.AppendChar(_T('\\'));
+		}
 	}
 
 	ApiSetSchema* pApiSetSchema = GetApiSetSchema();
 
-	RemoveApiSets(argv[1], pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
+	if (IsDir(strDir_or_File))
+	{
+		EnumDirectory(strDir_or_File, DirectoryEnumProc, (LPARAM)pApiSetSchema);
+	}
+	else
+	{
+		DirectoryEnumProc_Internal(strDir_or_File, GetFileName(strDir_or_File), (LPARAM)pApiSetSchema);
+	}
 
 	CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* pInfos = pApiSetSchema->GetAll();
 	delete pInfos;
 	pInfos = NULL;
 	delete pApiSetSchema;
 	pApiSetSchema = NULL;
+
+	_tprintf(_T("所有符合条件的文件已全部转换完成！\r\n"));
+	getchar();
 	return 0;
 }
 

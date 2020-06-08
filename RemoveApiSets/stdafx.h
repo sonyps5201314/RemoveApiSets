@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <tchar.h>
+#include <locale.h>
 
 #include <Windows.h>
 #include <ntdll.h>
