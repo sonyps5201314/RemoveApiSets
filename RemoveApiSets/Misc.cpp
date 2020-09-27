@@ -120,3 +120,48 @@ BOOL WINAPI EnumDirectory(LPCTSTR lpDstDir, DirectoryEnumProcType lpDirectoryEnu
 	FindClose(hFind);
 	return TRUE;
 }
+
+//返回给定错误号的错误信息
+//目前只限于报告WIN32函数的错误
+CString Error(int ErrorNumber)
+{
+	if (ErrorNumber == 0)//获取最后一次错误
+	{
+		ErrorNumber = GetLastError();
+	}
+	if (ErrorNumber == 0)
+	{
+		ATL::CComQIPtr <IErrorInfo> spErrInfo;	// 声明IErrorInfo接口
+		HRESULT hr = GetErrorInfo(0, &spErrInfo);	// 取得接口
+		if (hr == S_OK)
+		{
+			ATL::CComBSTR bstrDes;
+			spErrInfo->GetDescription(&bstrDes);	// 取得错误描述
+			//......
+			// 还可以取得其它的信息
+#ifndef _ATL_CSTRING_EXPLICIT_CONSTRUCTORS
+			return (BSTR)bstrDes;
+#else
+			return CComVariant(bstrDes);
+#endif
+		}
+	}
+	if (ErrorNumber == ERROR_SUCCESS)
+	{
+		return NullString;
+	}
+	LPTSTR lpMsgBuf;
+	int nRet = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, ErrorNumber, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+		(LPTSTR)&lpMsgBuf, 0, NULL);
+	if (nRet > 2)
+	{
+		//去掉末尾的换行符
+		if (!_tcsncmp(&lpMsgBuf[nRet - 2], _T("\r\n"), 2))
+		{
+			lpMsgBuf[nRet - 2] = 0;
+		}
+	}
+	CString RetStr = (LPTSTR)lpMsgBuf;
+	LocalFree(lpMsgBuf);
+	return RetStr;
+}

@@ -158,30 +158,27 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName)
 {
 	BOOL bRet = FALSE;
-	HANDLE hFile;
-	HANDLE hMapping;
-	LPVOID lpImageBase;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	HANDLE hMapping = NULL;
+	LPVOID lpImageBase = NULL;
 
 	hFile = CreateFile(szFileName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
-	if (!hFile)
+	if (hFile == INVALID_HANDLE_VALUE)
 	{
-		return FALSE;
+		goto __finish__;
 	}
 
 	hMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0, NULL);
 	if (!hMapping)
 	{
-		CloseHandle(hFile);
-		return FALSE;
+		goto __finish__;
 	}
 
 	lpImageBase = MapViewOfFile(hMapping, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
 	if (!lpImageBase)
 	{
-		CloseHandle(hFile);
-		CloseHandle(hMapping);
-		return false;
+		goto __finish__;
 	}
 
 	PIMAGE_DOS_HEADER dos_header;
@@ -191,27 +188,27 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 	if (dos_header->e_magic != IMAGE_DOS_SIGNATURE)
 	{
 		SetLastError(ERROR_BAD_EXE_FORMAT);
-		goto __UNMAP_PE__;
+		goto __finish__;
 	}
 
 	Nt_headers = (PIMAGE_NT_HEADERS) & ((const unsigned char *)(lpImageBase))[dos_header->e_lfanew];
 	if (Nt_headers->Signature != IMAGE_NT_SIGNATURE)
 	{
 		SetLastError(ERROR_BAD_EXE_FORMAT);
-		goto __UNMAP_PE__;
+		goto __finish__;
 	}
 
 #if _M_IX86
 	if (Nt_headers->FileHeader.Machine != IMAGE_FILE_MACHINE_I386)
 	{
 		SetLastError(ERROR_INVALID_MODULETYPE);
-		goto __UNMAP_PE__;
+		goto __finish__;
 	}
 #elif _M_AMD64
 	if (Nt_headers->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
 	{
 		SetLastError(ERROR_INVALID_MODULETYPE);
-		goto __UNMAP_PE__;
+		goto __finish__;
 	}
 #else
 	ATLASSERT(FALSE);//未支持处理的架构类型
@@ -283,29 +280,43 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 		}
 	}
 
-__UNMAP_PE__:
+	bRet = TRUE;
+
+__finish__:
 	if (lpImageBase)
 	{
 		UnmapViewOfFile(lpImageBase);
+		lpImageBase = NULL;
 	}
 
 	if (hMapping)
 	{
 		CloseHandle(hMapping);
+		hMapping = NULL;
 	}
 
-	if (hFile)
+	if (hFile != INVALID_HANDLE_VALUE)
 	{
 		CloseHandle(hFile);
+		hFile = INVALID_HANDLE_VALUE;
 	}
 
 	return bRet;
 }
 
+int nRootDirLength;
 BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM lParam)
 {
 	ApiSetSchema* pApiSetSchema = (ApiSetSchema*)lParam;
-	RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
+	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
+	if (!bResult)
+	{
+		DWORD dwError = GetLastError();
+		if (dwError != ERROR_BAD_EXE_FORMAT && dwError != ERROR_INVALID_MODULETYPE)
+		{
+			_tprintf(_T("RemoveApiSets failed! %s %s\r\n"), (LPCTSTR)Error(dwError), &FileFullPath[nRootDirLength]);
+		}
+	}
 	return TRUE;
 }
 
@@ -351,6 +362,7 @@ int _tmain(int argc, _TCHAR *argv[])
 
 	if (IsDir(strDir_or_File))
 	{
+		nRootDirLength = strDir_or_File.GetLength();
 		EnumDirectory(strDir_or_File, DirectoryEnumProc, (LPARAM)pApiSetSchema);
 	}
 	else
