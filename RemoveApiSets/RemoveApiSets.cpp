@@ -28,7 +28,7 @@ DWORD_PTR RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD_PTR dwRva)
 	return 0;
 }
 
-BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName, LPCSTR pFirstFuncName)
+BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName, LPCSTR pFirstFuncName)
 {
 	BOOL bResult = FALSE;
 
@@ -114,12 +114,12 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 
 		if (bResult == FALSE)
 		{
-			static const LPCSTR pszDllNames[] = { "msvcp140.dll","msvcp140_1.dll" };
-			//我们的CRT中msvcp140_2模块是静态链接的，所以暂时不支持替换msvcp140_2.dll
+			static const LPCSTR pszDllNames[] = { "msvcp140.dll","msvcp140_1.dll","msvcp140_2.dll","msvcp140_atomic_wait.dll","msvcp140_codecvt_ids.dll" };
 			for (int i = 0; i < _countof(pszDllNames); i++)
 			{
 				if (!_stricmp(pDllName, pszDllNames[i]))
 				{
+					CStringA strNewVcpDllName = strNewVcpDllsName[i];
 					if (strNewVcpDllName.GetLength() <= nDllNameLen)
 					{
 						lstrcpynA(pDllName, strNewVcpDllName, strNewVcpDllName.GetLength() + 1);
@@ -155,7 +155,7 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	return bResult;
 }
 
-BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllName, CStringA strNewConCrtDllName)
+BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName)
 {
 	BOOL bRet = FALSE;
 	HANDLE hFile = INVALID_HANDLE_VALUE;
@@ -229,12 +229,12 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 				PIMAGE_THUNK_DATA pFunctionNameThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->OriginalFirstThunk));
 				if (pFunctionNameThunk[0].u1.Ordinal & IMAGE_ORDINAL_FLAG)
 				{
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
 				}
 				else
 				{
 					PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk[0].u1.AddressOfData));
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)pByName->Name);
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, (LPCSTR)pByName->Name);
 				}
 			}
 
@@ -265,14 +265,14 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 					PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pThunk->u1.AddressOfData));
 					//ATLTRACE(_T("VA: %08X Hint: %08X, FunctionName: %s\n"), pThunkIAT->u1.Function,pImportName->Hint, pImportName->Name);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, (LPCSTR)pImportName->Name);
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, (LPCSTR)pImportName->Name);
 				}
 				else
 				{
 					DWORD Ordinal = DWORD(IMAGE_ORDINAL(pThunk->u1.Ordinal));
 					//ATLTRACE(_T("VA: %08X Hint:Ord FunctionName:%s.%d\n"), pThunkIAT->u1.Function,DllTitle, Ordinal);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllName, strNewConCrtDllName, MAKEINTRESOURCEA(Ordinal));
+					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, MAKEINTRESOURCEA(Ordinal));
 				}
 			}
 
@@ -308,7 +308,8 @@ int nRootDirLength;
 BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM lParam)
 {
 	ApiSetSchema* pApiSetSchema = (ApiSetSchema*)lParam;
-	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), _T("MSVCP14X.dll"), _T("CONCRT14X.dll"));
+	static CStringA strNewVcpDllsName[] = { "MSVCP14X.DLL","MSVCP14X_1.DLL","MSVCP14X_2.DLL","MSVCP14X_ATOMIC_WAIT.DLL","MSVCP14X_CODECVT_IDS.DLL" };
+	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), strNewVcpDllsName, _T("CONCRT14X.dll"));
 	if (!bResult)
 	{
 		DWORD dwError = GetLastError();
