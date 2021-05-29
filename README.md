@@ -4,6 +4,8 @@ RemoveApiSets is a program that can replace the ApiSets Dlls that already depend
 ## prior project:
 https://github.com/sonyps5201314/ntdll.git
 
+https://github.com/sonyps5201314/msvcr14x.git
+
 ## build steps:
 1.git clone https://github.com/sonyps5201314/RemoveApiSets
 
