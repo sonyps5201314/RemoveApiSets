@@ -29,7 +29,7 @@ class ApiSetSchema
 {
 public:
 	virtual CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* GetAll() = 0;
-	virtual ApiSetTarget* Lookup(LPCTSTR name) = 0;
+	virtual ApiSetTarget* Lookup(CString name) = 0;
 };
 
 ApiSetSchema* GetApiSetSchema(LPVOID lpImageBase, PIMAGE_NT_HEADERS pNt);

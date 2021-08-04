@@ -55,7 +55,7 @@ class EmptyApiSetSchema sealed : public ApiSetSchema
 {
 public:
 	CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* GetAll() override { return new CAtlArray<KeyValuePair<CString, ApiSetTarget*>>(); }
-    ApiSetTarget* Lookup(LPCTSTR) override { return nullptr; }
+    ApiSetTarget* Lookup(CString) override { return nullptr; }
 };
 
 class V2V4ApiSetSchema sealed : public ApiSetSchema
@@ -64,24 +64,27 @@ public:
     CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* const All = new CAtlArray<KeyValuePair<CString, ApiSetTarget*>>();
 
     CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* GetAll() override { return All; }
-    ApiSetTarget* Lookup(LPCTSTR name) override
+    ApiSetTarget* Lookup(CString name) override
     {
 		// TODO : check if ext- is not present on win7 and 8.1
-        if (_tcsncmp(name,_T("api-"),4))
+        if (_tcsnicmp(name,_T("api-"), 4))
             return nullptr;
 
+		// Force lowercase name
+		name = name.MakeLower();
+
 		// remove "api-" or "ext-" prefix
-		name = &name[4];
+		name = name.Mid(4);
 
         // Note: The list is initially alphabetically sorted!!!
-        auto min = (size_t)0;
-        auto max = All->GetCount() - 1;
+        auto min = (INT_PTR)0;
+        auto max = (INT_PTR)All->GetCount() - 1;
 		while (min <= max)
 		{
 			auto const cur = (min + max) / 2;
 			auto pair = All->GetAt(cur);
 
-			if (!_tcscmp(name, pair.key))
+			if (!_tcsicmp(name, pair.key))
 				return pair.value;
 
 			if (_tcscmp(name, pair.key) < 0)
@@ -112,8 +115,11 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV2(API_SET_NAMESPACE_V2 const * c
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
 		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
-		name.MakeLower();
-		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
+
+		// force storing lowercase variant for comparison
+		auto const lower_name = name.MakeLower();
+		
+		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(lower_name, targets));
 	}
 	return schema;
 }
@@ -137,8 +143,11 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV4(API_SET_NAMESPACE_V4 const * c
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
 		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
-		name.MakeLower();
-		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
+
+		// force storing lowercase variant for comparison
+		auto const lower_name = name.MakeLower();
+
+		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(lower_name, targets));
 	}
 	return schema;
 }
@@ -150,20 +159,20 @@ public:
     CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* HashedAll = new CAtlArray<KeyValuePair<CString, ApiSetTarget*>>();
 
     CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* GetAll() override { return All; }
-    ApiSetTarget* Lookup(LPCTSTR name) override
+    ApiSetTarget* Lookup(CString name) override
     {
-		// remove "api-" or "ext-" prefix
-		//name = name->Substring(4);
+		// Force lowercase name
+		name = name.MakeLower();
 
         // Note: The list is initially alphabetically sorted!!!
-        auto min = (size_t)0;
-        auto max = HashedAll->GetCount() - 1;
+        auto min = (INT_PTR)0;
+        auto max = (INT_PTR)HashedAll->GetCount() - 1;
         while (min <= max)
         {
             auto const cur = (min + max) / 2;
             auto pair = HashedAll->GetAt(cur);
             
-			if (!_tcsncmp(name, pair.key, pair.key.GetLength()))
+			if (!_tcsnicmp(name, pair.key, pair.key.GetLength()))
 				return pair.value;
 
             if (_tcscmp(name, pair.key) < 0)
@@ -194,10 +203,14 @@ ApiSetSchema* ApiSetSchemaImpl::GetApiSetSchemaV6(API_SET_NAMESPACE_V6 const * c
 		// Retrieve api min-win contract name
 		auto const name_buffer = reinterpret_cast<PWCHAR>(base + it->NameOffset);
 		auto name = CString(name_buffer, it->NameLength / sizeof(WCHAR));
-		name.MakeLower();
-		auto const hash_name = CString(name_buffer, it->HashedLength / sizeof(WCHAR));
-		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(name, targets));
-		schema->HashedAll->Add(KeyValuePair<CString, ApiSetTarget*>(hash_name, targets));
+		auto hash_name = CString(name_buffer, it->HashedLength / sizeof(WCHAR));
+
+		// force storing lowercase variant for comparison
+		auto const lower_name = name.MakeLower();
+		auto const lower_hash_name = hash_name.MakeLower();
+
+		schema->All->Add(KeyValuePair<CString, ApiSetTarget*>(lower_name, targets));
+		schema->HashedAll->Add(KeyValuePair<CString, ApiSetTarget*>(lower_hash_name, targets));
 	}
 	return schema;
 }
