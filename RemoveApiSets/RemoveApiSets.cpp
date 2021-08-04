@@ -38,46 +38,51 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	if (pApiSetTarget)
 	{
 		CStringA strNewDllName = pApiSetTarget->GetAt(0);
-		if (strNewDllName.GetLength() <= nDllNameLen)
+		if (!strNewDllName.CompareNoCase("ucrtbase.dll"))
 		{
-			if (!strNewDllName.CompareNoCase("kernelbase.dll"))
+			strNewDllName = strNewVcrDllName;
+		}
+		else if (!strNewDllName.CompareNoCase("kernelbase.dll"))
+		{
+			if (pApiSetTarget->GetCount() == 1)
 			{
-				if (pApiSetTarget->GetCount() == 1)
+				BOOL bFindNewDllName = FALSE;
+				static const LPCSTR pszNewDllNames[] = { "kernel32.dll","advapi32.dll" };
+				for (int i = 0; i < _countof(pszNewDllNames); i++)
 				{
-					BOOL bFindNewDllName = FALSE;
-					static const LPCSTR pszNewDllNames[] = { "kernel32.dll","advapi32.dll" };
-					for (int i = 0; i < _countof(pszNewDllNames); i++)
+					HMODULE hMod = LoadLibrary(pszNewDllNames[i]);
+					if (hMod)
 					{
-						HMODULE hMod = LoadLibrary(pszNewDllNames[i]);
-						if (hMod)
+						if (GetProcAddress(hMod, pFirstFuncName))
 						{
-							if (GetProcAddress(hMod, pFirstFuncName))
-							{
-								strNewDllName = pszNewDllNames[i];
-								bFindNewDllName = TRUE;
-							}
+							strNewDllName = pszNewDllNames[i];
+							bFindNewDllName = TRUE;
+						}
 
-							FreeLibrary(hMod);
-							hMod = NULL;
+						FreeLibrary(hMod);
+						hMod = NULL;
 
-							if (bFindNewDllName)
-							{
-								break;
-							}
+						if (bFindNewDllName)
+						{
+							break;
 						}
 					}
-
-					if (!bFindNewDllName)
-					{
-						ATLASSERT(FALSE);
-						printf("can not find new dll name for replace \"kernelbase.dll\"!\r\n");
-					}
 				}
-				else
+
+				if (!bFindNewDllName)
 				{
-					strNewDllName = pApiSetTarget->GetAt(1);
+					ATLASSERT(FALSE);
+					printf("can not find new dll name for replace \"kernelbase.dll\"!\r\n");
 				}
 			}
+			else
+			{
+				strNewDllName = pApiSetTarget->GetAt(1);
+			}
+		}
+
+		if (strNewDllName.GetLength() <= nDllNameLen)
+		{
 			lstrcpynA(pDllName, strNewDllName, strNewDllName.GetLength() + 1);
 			bResult = TRUE;
 		}
