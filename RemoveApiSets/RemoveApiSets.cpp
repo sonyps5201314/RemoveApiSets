@@ -219,7 +219,7 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 		goto __finish__;
 	}
 
-	Nt_headers = (PIMAGE_NT_HEADERS) & ((const unsigned char *)(lpImageBase))[dos_header->e_lfanew];
+	Nt_headers = (PIMAGE_NT_HEADERS) & ((const unsigned char*)(lpImageBase))[dos_header->e_lfanew];
 	if (Nt_headers->Signature != IMAGE_NT_SIGNATURE)
 	{
 		SetLastError(ERROR_BAD_EXE_FORMAT);
@@ -352,10 +352,14 @@ BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM 
 
 BOOL CALLBACK DirectoryEnumProc(LPWIN32_FIND_DATA lpFfd, LPCTSTR FileFullPath, LPARAM lParam)
 {
+	if (lpFfd->nFileSizeLow == 0 && lpFfd->nFileSizeHigh == 0)
+	{
+		return TRUE;
+	}
 	return DirectoryEnumProc_Internal(FileFullPath, lpFfd->cFileName, lParam);
 }
 
-int _tmain(int argc, _TCHAR *argv[])
+int _tmain(int argc, _TCHAR* argv[])
 {
 	CString strDir_or_File;
 
@@ -397,7 +401,10 @@ int _tmain(int argc, _TCHAR *argv[])
 	}
 	else
 	{
-		DirectoryEnumProc_Internal(strDir_or_File, GetFileName(strDir_or_File), (LPARAM)pApiSetSchema);
+		if (FileLen(strDir_or_File).QuadPart > 0)
+		{
+			DirectoryEnumProc_Internal(strDir_or_File, GetFileName(strDir_or_File), (LPARAM)pApiSetSchema);
+		}
 	}
 
 	CAtlArray<KeyValuePair<CString, ApiSetTarget*>>* pInfos = pApiSetSchema->GetAll();

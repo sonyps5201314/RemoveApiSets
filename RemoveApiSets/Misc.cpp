@@ -121,6 +121,36 @@ BOOL WINAPI EnumDirectory(LPCTSTR lpDstDir, DirectoryEnumProcType lpDirectoryEnu
 	return TRUE;
 }
 
+//返回值为0也有可能代表执行函数失败，如文件不存在的情况。
+LARGE_INTEGER FileLen(LPCWSTR PathName)
+{
+	//也可以用stat实现
+	WIN32_FILE_ATTRIBUTE_DATA FileAttribData =
+	{
+		0
+	};
+	GetFileAttributesExW(PathName, GetFileExInfoStandard, &FileAttribData);
+	LARGE_INTEGER RetValue =
+	{
+		FileAttribData.nFileSizeLow, (LONG)FileAttribData.nFileSizeHigh
+	};
+	return RetValue;
+}
+LARGE_INTEGER FileLen(LPCSTR PathName)
+{
+	//也可以用stat实现
+	WIN32_FILE_ATTRIBUTE_DATA FileAttribData =
+	{
+		0
+	};
+	GetFileAttributesExA(PathName, GetFileExInfoStandard, &FileAttribData);
+	LARGE_INTEGER RetValue =
+	{
+		FileAttribData.nFileSizeLow, (LONG)FileAttribData.nFileSizeHigh
+	};
+	return RetValue;
+}
+
 //返回给定错误号的错误信息
 //目前只限于报告WIN32函数的错误
 CString Error(int ErrorNumber)

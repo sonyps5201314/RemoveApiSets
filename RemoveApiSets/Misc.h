@@ -22,10 +22,14 @@ BOOL IsFile(LPCSTR Path);
 
 
 //EnumDirectory只在你的枚举回调函数lpfn返回FALSE时才返回TRUE,即达到匹配时
-typedef BOOL(CALLBACK *DirectoryEnumProcType)(LPWIN32_FIND_DATA lpFfd,
+typedef BOOL(CALLBACK* DirectoryEnumProcType)(LPWIN32_FIND_DATA lpFfd,
 	LPCTSTR FileFullPath, LPARAM lParam);
 //注意：即使参数bResultIncludeDir指定为TRUE时也不会在回调函数lpDirectoryEnumProc中返回被枚举的根目录lpDstDir
 BOOL WINAPI EnumDirectory(LPCTSTR lpDstDir, DirectoryEnumProcType lpDirectoryEnumProc, LPARAM lParam, BOOL bResultIncludeDir = FALSE);
+
+//返回值为0也有可能代表执行函数失败，如文件不存在的情况。
+LARGE_INTEGER FileLen(LPCWSTR PathName);
+LARGE_INTEGER FileLen(LPCSTR PathName);
 
 //返回给定错误号的错误信息
 //目前只限于报告WIN32函数的错误
