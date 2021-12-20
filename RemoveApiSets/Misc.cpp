@@ -195,3 +195,25 @@ CString Error(int ErrorNumber)
 	LocalFree(lpMsgBuf);
 	return RetStr;
 }
+
+//https://blog.csdn.net/MoreWindows/article/details/6789206
+BOOL SetConsoleColor(DWORD nStdHandle, WORD wAttributes)
+{
+	HANDLE hConsole = GetStdHandle(nStdHandle);
+	if (hConsole == INVALID_HANDLE_VALUE)
+		return FALSE;
+
+	return SetConsoleTextAttribute(hConsole, wAttributes);
+}
+BOOL SetConsoleInputColor(WORD wAttributes)
+{
+	return SetConsoleColor(STD_INPUT_HANDLE, wAttributes);
+}
+BOOL SetConsoleOutputColor(WORD wAttributes)
+{
+	return SetConsoleColor(STD_OUTPUT_HANDLE, wAttributes);
+}
+BOOL SetConsoleErrorColor(WORD wAttributes)
+{
+	return SetConsoleColor(STD_ERROR_HANDLE, wAttributes);
+}

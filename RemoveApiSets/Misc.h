@@ -34,3 +34,12 @@ LARGE_INTEGER FileLen(LPCSTR PathName);
 //返回给定错误号的错误信息
 //目前只限于报告WIN32函数的错误
 CString Error(int ErrorNumber = 0);
+
+//控制台
+
+//设置控制台颜色
+//一共有16种文字颜色，16种背景颜色，组合有256种。传入的值应当小于256
+#define CONSOLE_DEFAULT_COLOR_ATTRIBUTES (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+BOOL SetConsoleInputColor(WORD wAttributes);
+BOOL SetConsoleOutputColor(WORD wAttributes);
+BOOL SetConsoleErrorColor(WORD wAttributes);

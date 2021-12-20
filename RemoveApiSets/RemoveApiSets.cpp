@@ -183,12 +183,14 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 	return bResult;
 }
 
-BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName, CStringA strNewMfcDllsName[2])
+BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName, CStringA strNewMfcDllsName[2], BOOL& bReplacedAtLeastOnce)
 {
 	BOOL bRet = FALSE;
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	HANDLE hMapping = NULL;
 	LPVOID lpImageBase = NULL;
+
+	bReplacedAtLeastOnce = FALSE;
 
 	hFile = CreateFile(szFileName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
@@ -257,12 +259,20 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 				PIMAGE_THUNK_DATA pFunctionNameThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->OriginalFirstThunk));
 				if (pFunctionNameThunk[0].u1.Ordinal & IMAGE_ORDINAL_FLAG)
 				{
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
+					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
+					if (bReplaced && !bReplacedAtLeastOnce)
+					{
+						bReplacedAtLeastOnce = TRUE;
+					}
 				}
 				else
 				{
 					PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk[0].u1.AddressOfData));
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pByName->Name);
+					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pByName->Name);
+					if (bReplaced && !bReplacedAtLeastOnce)
+					{
+						bReplacedAtLeastOnce = TRUE;
+					}
 				}
 			}
 
@@ -293,14 +303,22 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 					PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pThunk->u1.AddressOfData));
 					//ATLTRACE(_T("VA: %08X Hint: %08X, FunctionName: %s\n"), pThunkIAT->u1.Function,pImportName->Hint, pImportName->Name);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pImportName->Name);
+					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pImportName->Name);
+					if (bReplaced && !bReplacedAtLeastOnce)
+					{
+						bReplacedAtLeastOnce = TRUE;
+					}
 				}
 				else
 				{
 					DWORD Ordinal = DWORD(IMAGE_ORDINAL(pThunk->u1.Ordinal));
 					//ATLTRACE(_T("VA: %08X Hint:Ord FunctionName:%s.%d\n"), pThunkIAT->u1.Function,DllTitle, Ordinal);
 
-					TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, MAKEINTRESOURCEA(Ordinal));
+					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, MAKEINTRESOURCEA(Ordinal));
+					if (bReplaced && !bReplacedAtLeastOnce)
+					{
+						bReplacedAtLeastOnce = TRUE;
+					}
 				}
 			}
 
@@ -332,13 +350,17 @@ __finish__:
 	return bRet;
 }
 
+DWORD nConvertFileCount;
+
 int nRootDirLength;
 BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM lParam)
 {
 	ApiSetSchema* pApiSetSchema = (ApiSetSchema*)lParam;
 	static CStringA strNewVcpDllsName[] = { "MSVCP14X.DLL","MSVCP14X_1.DLL","MSVCP14X_2.DLL","MSVCP14X_ATOMIC_WAIT.DLL","MSVCP14X_CODECVT_IDS.DLL" };
 	static CStringA strNewMfcDllsName[] = { "MFC14XU.dll","MFC14X.dll" };
-	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), strNewVcpDllsName, _T("CONCRT14X.dll"), strNewMfcDllsName);
+	SetConsoleOutputColor(FOREGROUND_RED);
+	BOOL bReplacedAtLeastOnce;
+	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), strNewVcpDllsName, _T("CONCRT14X.dll"), strNewMfcDllsName, bReplacedAtLeastOnce);
 	if (!bResult)
 	{
 		DWORD dwError = GetLastError();
@@ -346,6 +368,12 @@ BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM 
 		{
 			_tprintf(_T("RemoveApiSets failed! %s %s\r\n"), (LPCTSTR)Error(dwError), &FileFullPath[nRootDirLength]);
 		}
+	}
+	SetConsoleOutputColor(CONSOLE_DEFAULT_COLOR_ATTRIBUTES);
+	if (bReplacedAtLeastOnce)
+	{
+		_tprintf(_T("RemoveApiSets ok. %s\r\n"), &FileFullPath[nRootDirLength]);
+		nConvertFileCount++;
 	}
 	return TRUE;
 }
@@ -392,6 +420,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		}
 	}
 
+	nConvertFileCount = 0;
+
 	ApiSetSchema* pApiSetSchema = GetApiSetSchema();
 
 	if (IsDir(strDir_or_File))
@@ -413,7 +443,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	delete pApiSetSchema;
 	pApiSetSchema = NULL;
 
-	_tprintf(_T("All eligible files have been converted!\r\n"));
+	if (nConvertFileCount)
+	{
+		_tprintf(_T("All eligible files[count=%u] have been converted!\r\n"), nConvertFileCount);
+	}
+	else
+	{
+		_tprintf(_T("No files need to be converted!\r\n"));
+	}
 	getchar();
 	return 0;
 }
