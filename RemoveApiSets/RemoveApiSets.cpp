@@ -451,7 +451,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	{
 		_tprintf(_T("No files need to be converted!\r\n"));
 	}
-	getchar();
+	//getchar();
 	return 0;
 }
 
