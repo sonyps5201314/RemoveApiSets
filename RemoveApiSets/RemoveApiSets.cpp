@@ -80,6 +80,10 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 				strNewDllName = pApiSetTarget->GetAt(1);
 			}
 		}
+		else if (!strNewDllName.CompareNoCase("combase.dll"))
+		{
+			strNewDllName = "ole32.dll";
+		}
 
 		if (strNewDllName.GetLength() <= nDllNameLen)
 		{
