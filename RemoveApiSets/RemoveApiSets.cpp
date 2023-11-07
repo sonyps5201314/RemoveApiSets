@@ -72,7 +72,7 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 				if (!bFindNewDllName)
 				{
 					ATLASSERT(FALSE);
-					printf("can not find new dll name for replace \"kernelbase.dll\"!\r\n");
+					printf("can not find \"%s\" in \"kernel32.dll\" or \"advapi32.dll\", so keep \"kernelbase.dll\" in import table!\r\n", pFirstFuncName);
 				}
 			}
 			else
@@ -80,7 +80,7 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 				strNewDllName = pApiSetTarget->GetAt(1);
 			}
 		}
-		else if (!strNewDllName.CompareNoCase("combase.dll"))
+		else if (!strNewDllName.CompareNoCase("combase.dll") && _strnicmp(pDllName, "api-ms-win-core-winrt-", CONST_STRING_LENGTH("api-ms-win-core-winrt-")) != 0)
 		{
 			strNewDllName = "ole32.dll";
 		}

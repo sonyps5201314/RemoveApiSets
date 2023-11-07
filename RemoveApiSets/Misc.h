@@ -7,6 +7,9 @@
 #define NullStringW  L""
 #define NullString  _T("")
 
+//获取常量字符串的长度
+#define CONST_STRING_LENGTH(s) (_countof(s)-1)
+
 //返回不包含路径的文件名
 LPCWSTR GetFileName(LPCWSTR Path);
 LPCSTR GetFileName(LPCSTR Path);

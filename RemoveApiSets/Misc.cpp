@@ -57,8 +57,8 @@ BOOL WINAPI EnumDirectory(LPCTSTR lpDstDir, DirectoryEnumProcType lpDirectoryEnu
 	TCHAR FileFullPath[MAX_PATH];
 
 	int Xstrlen = lstrlen(lpDstDir);
-	ATLASSERT(lpDstDir && lpDirectoryEnumProc && lpDstDir[lstrlen(lpDstDir) - 1] == _T('\\'));
-	if (!(lpDstDir && lpDirectoryEnumProc && lpDstDir[lstrlen(lpDstDir) - 1] == _T('\\')))
+	ATLASSERT(lpDstDir && lpDirectoryEnumProc && lpDstDir[Xstrlen - 1] == _T('\\'));
+	if (!(lpDstDir && lpDirectoryEnumProc && lpDstDir[Xstrlen - 1] == _T('\\')))
 		return FALSE;
 
 	// Prepare string for use with FindFile functions.  First, copy the
