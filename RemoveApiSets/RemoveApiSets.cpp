@@ -28,7 +28,89 @@ DWORD_PTR RvaToOffset(PIMAGE_NT_HEADERS pNt, DWORD_PTR dwRva)
 	return 0;
 }
 
-BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName, CStringA strNewMfcDllsName[2], LPCSTR pFirstFuncName)
+BOOL CanFindAllProcInNewDll(LPVOID lpImageBase, PIMAGE_THUNK_DATA pFunctionNameThunk, LPCSTR pszNewDllName, LPCSTR* ppszCanNotFoundProcName)
+{
+	BOOL bResult = TRUE;
+
+	PIMAGE_DOS_HEADER dos_header = (PIMAGE_DOS_HEADER)lpImageBase;
+	PIMAGE_NT_HEADERS Nt_headers = (PIMAGE_NT_HEADERS) & ((const unsigned char*)(lpImageBase))[dos_header->e_lfanew];
+
+	HMODULE hMod = LoadLibrary(pszNewDllName);
+	if (hMod)
+	{
+		for (; pFunctionNameThunk->u1.Function; pFunctionNameThunk++)
+		{
+			LPCSTR pszProcName;
+
+			if (IMAGE_SNAP_BY_ORDINAL(pFunctionNameThunk->u1.Ordinal))
+			{
+				pszProcName = (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk->u1.Ordinal);
+			}
+			else
+			{
+				PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk->u1.AddressOfData));
+				pszProcName = pByName->Name;
+			}
+
+			if (!GetProcAddress(hMod, pszProcName))
+			{
+				if (ppszCanNotFoundProcName)
+				{
+					*ppszCanNotFoundProcName = pszProcName;
+				}
+
+				bResult = FALSE;
+				break;
+			}
+		}
+
+		FreeLibrary(hMod);
+		hMod = NULL;
+	}
+	else
+	{
+		ATLASSERT(hMod);
+		bResult = FALSE;
+	}
+
+	return bResult;
+}
+
+BOOL CheckForUpdateDllName(PCHAR pDllName, int nDllNameLen, CStringA& strNewDllName)
+{
+	BOOL bResult = FALSE;
+
+	if (strNewDllName.GetLength() <= nDllNameLen)
+	{
+		lstrcpynA(pDllName, strNewDllName, strNewDllName.GetLength() + 1);
+		bResult = TRUE;
+	}
+	else
+	{
+		SetConsoleOutputColor(FOREGROUND_RED);
+		_tprintf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewDllName);
+		SetConsoleOutputColor(FOREGROUND_GREEN);
+		ATLASSERT(FALSE);
+	}
+
+	return bResult;
+}
+
+void PrintCanNotFoundProc(LPCSTR pszCanNotFoundProcName, LPCSTR pszNewDllName, LPCSTR pszTargetDllName)
+{
+	printf("can not find ");
+	if (IS_INTRESOURCE(pszCanNotFoundProcName))
+	{
+		printf("#%hu", (WORD)(DWORD_PTR)pszCanNotFoundProcName);
+	}
+	else
+	{
+		printf("\"%s\"", pszCanNotFoundProcName);
+	}
+	printf(" in \"%s\", so keep \"%s\" in import table!\r\n", pszNewDllName, pszTargetDllName);
+}
+
+BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStringA strNewVcrDllName, CStringA strNewVcpDllsName[5], CStringA strNewConCrtDllName, CStringA strNewMfcDllsName[2], LPVOID lpImageBase, PIMAGE_THUNK_DATA pFunctionNameThunk)
 {
 	BOOL bResult = FALSE;
 
@@ -48,31 +130,22 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 			{
 				BOOL bFindNewDllName = FALSE;
 				static const LPCSTR pszNewDllNames[] = { "kernel32.dll","advapi32.dll" };
+				LPCSTR pszCanNotFoundProcName = NULL;
 				for (int i = 0; i < _countof(pszNewDllNames); i++)
 				{
-					HMODULE hMod = LoadLibrary(pszNewDllNames[i]);
-					if (hMod)
+					if (CanFindAllProcInNewDll(lpImageBase, pFunctionNameThunk, pszNewDllNames[i], i == 0 ? &pszCanNotFoundProcName : NULL))
 					{
-						if (GetProcAddress(hMod, pFirstFuncName))
-						{
-							strNewDllName = pszNewDllNames[i];
-							bFindNewDllName = TRUE;
-						}
+						strNewDllName = pszNewDllNames[i];
 
-						FreeLibrary(hMod);
-						hMod = NULL;
-
-						if (bFindNewDllName)
-						{
-							break;
-						}
+						bFindNewDllName = TRUE;
+						break;
 					}
 				}
 
 				if (!bFindNewDllName)
 				{
-					ATLASSERT(FALSE);
-					printf("can not find \"%s\" in \"kernel32.dll\" or \"advapi32.dll\", so keep \"kernelbase.dll\" in import table!\r\n", pFirstFuncName);
+					ATLASSERT(bFindNewDllName);
+					PrintCanNotFoundProc(pszCanNotFoundProcName, "kernel32.dll\" or \"advapi32.dll", (LPCSTR)strNewDllName);
 				}
 			}
 			else
@@ -82,18 +155,23 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		}
 		else if (!strNewDllName.CompareNoCase("combase.dll") && _strnicmp(pDllName, "api-ms-win-core-winrt-", CONST_STRING_LENGTH("api-ms-win-core-winrt-")) != 0)
 		{
-			strNewDllName = "ole32.dll";
+			LPCSTR pszNewDllName = "ole32.dll";
+			LPCSTR pszCanNotFoundProcName = NULL;
+			BOOL bFindNewDllName = CanFindAllProcInNewDll(lpImageBase, pFunctionNameThunk, pszNewDllName, &pszCanNotFoundProcName);
+			if (bFindNewDllName)
+			{
+				strNewDllName = pszNewDllName;
+			}
+			else
+			{
+				ATLASSERT(bFindNewDllName);
+				PrintCanNotFoundProc(pszCanNotFoundProcName, pszNewDllName, (LPCSTR)strNewDllName);
+			}
 		}
 
-		if (strNewDllName.GetLength() <= nDllNameLen)
+		if (CheckForUpdateDllName(pDllName, nDllNameLen, strNewDllName))
 		{
-			lstrcpynA(pDllName, strNewDllName, strNewDllName.GetLength() + 1);
 			bResult = TRUE;
-		}
-		else
-		{
-			printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewDllName);
-			ATLASSERT(FALSE);
 		}
 	}
 	else
@@ -107,16 +185,10 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		{
 			if (!_strnicmp(pDllName, pszDllNames[i], strlen(pszDllNames[i])))
 			{
-				if (strNewVcrDllName.GetLength() <= nDllNameLen)
+				if (CheckForUpdateDllName(pDllName, nDllNameLen, strNewVcrDllName))
 				{
-					lstrcpynA(pDllName, strNewVcrDllName, strNewVcrDllName.GetLength() + 1);
 					bResult = TRUE;
 					break;
-				}
-				else
-				{
-					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcrDllName);
-					ATLASSERT(FALSE);
 				}
 			}
 		}
@@ -129,16 +201,10 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 				if (!_stricmp(pDllName, pszDllNames[i]))
 				{
 					CStringA strNewVcpDllName = strNewVcpDllsName[i];
-					if (strNewVcpDllName.GetLength() <= nDllNameLen)
+					if (CheckForUpdateDllName(pDllName, nDllNameLen, strNewVcpDllName))
 					{
-						lstrcpynA(pDllName, strNewVcpDllName, strNewVcpDllName.GetLength() + 1);
 						bResult = TRUE;
 						break;
-					}
-					else
-					{
-						printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewVcpDllName);
-						ATLASSERT(FALSE);
 					}
 				}
 			}
@@ -148,15 +214,9 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 		{
 			if (!_stricmp(pDllName, "concrt140.dll"))
 			{
-				if (strNewConCrtDllName.GetLength() <= nDllNameLen)
+				if (CheckForUpdateDllName(pDllName, nDllNameLen, strNewConCrtDllName))
 				{
-					lstrcpynA(pDllName, strNewConCrtDllName, strNewConCrtDllName.GetLength() + 1);
 					bResult = TRUE;
-				}
-				else
-				{
-					printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewConCrtDllName);
-					ATLASSERT(FALSE);
 				}
 			}
 		}
@@ -169,16 +229,10 @@ BOOL TryDoReplaceDllNameItem(PCHAR pDllName, ApiSetSchema* pApiSetSchema, CStrin
 				if (!_stricmp(pDllName, pszDllNames[i]))
 				{
 					CStringA strNewMfcDllName = strNewMfcDllsName[i];
-					if (strNewMfcDllName.GetLength() <= nDllNameLen)
+					if (CheckForUpdateDllName(pDllName, nDllNameLen, strNewMfcDllName))
 					{
-						lstrcpynA(pDllName, strNewMfcDllName, strNewMfcDllName.GetLength() + 1);
 						bResult = TRUE;
 						break;
-					}
-					else
-					{
-						printf("new dll length to long!!!(%s->%s)\r\n", pDllName, (LPCSTR)strNewMfcDllName);
-						ATLASSERT(FALSE);
 					}
 				}
 			}
@@ -261,22 +315,10 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 			if (pImageImport->OriginalFirstThunk)
 			{
 				PIMAGE_THUNK_DATA pFunctionNameThunk = (PIMAGE_THUNK_DATA)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pImageImport->OriginalFirstThunk));
-				if (pFunctionNameThunk[0].u1.Ordinal & IMAGE_ORDINAL_FLAG)
+				BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, lpImageBase, pFunctionNameThunk);
+				if (bReplaced && !bReplacedAtLeastOnce)
 				{
-					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)IMAGE_ORDINAL(pFunctionNameThunk[0].u1.Ordinal));
-					if (bReplaced && !bReplacedAtLeastOnce)
-					{
-						bReplacedAtLeastOnce = TRUE;
-					}
-				}
-				else
-				{
-					PIMAGE_IMPORT_BY_NAME pByName = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)lpImageBase + RvaToOffset(Nt_headers, pFunctionNameThunk[0].u1.AddressOfData));
-					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pByName->Name);
-					if (bReplaced && !bReplacedAtLeastOnce)
-					{
-						bReplacedAtLeastOnce = TRUE;
-					}
+					bReplacedAtLeastOnce = TRUE;
 				}
 			}
 
@@ -301,28 +343,10 @@ BOOL RemoveApiSets(LPCTSTR szFileName, ApiSetSchema* pApiSetSchema, CStringA str
 			// 循环IAT项
 			if (pThunk->u1.Function)
 			{
-				if (!IMAGE_SNAP_BY_ORDINAL(pThunk->u1.Ordinal))
+				BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, lpImageBase, pThunk);
+				if (bReplaced && !bReplacedAtLeastOnce)
 				{
-					// 获取导入表数据
-					PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)lpImageBase + RvaToOffset(Nt_headers, pThunk->u1.AddressOfData));
-					//ATLTRACE(_T("VA: %08X Hint: %08X, FunctionName: %s\n"), pThunkIAT->u1.Function,pImportName->Hint, pImportName->Name);
-
-					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, (LPCSTR)pImportName->Name);
-					if (bReplaced && !bReplacedAtLeastOnce)
-					{
-						bReplacedAtLeastOnce = TRUE;
-					}
-				}
-				else
-				{
-					DWORD Ordinal = DWORD(IMAGE_ORDINAL(pThunk->u1.Ordinal));
-					//ATLTRACE(_T("VA: %08X Hint:Ord FunctionName:%s.%d\n"), pThunkIAT->u1.Function,DllTitle, Ordinal);
-
-					BOOL bReplaced = TryDoReplaceDllNameItem(pDllName, pApiSetSchema, strNewVcrDllName, strNewVcpDllsName, strNewConCrtDllName, strNewMfcDllsName, MAKEINTRESOURCEA(Ordinal));
-					if (bReplaced && !bReplacedAtLeastOnce)
-					{
-						bReplacedAtLeastOnce = TRUE;
-					}
+					bReplacedAtLeastOnce = TRUE;
 				}
 			}
 
@@ -362,7 +386,7 @@ BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM 
 	ApiSetSchema* pApiSetSchema = (ApiSetSchema*)lParam;
 	static CStringA strNewVcpDllsName[] = { "MSVCP14X.DLL","MSVCP14X_1.DLL","MSVCP14X_2.DLL","MSVCP14X_ATOMIC_WAIT.DLL","MSVCP14X_CODECVT_IDS.DLL" };
 	static CStringA strNewMfcDllsName[] = { "MFC14XU.dll","MFC14X.dll" };
-	SetConsoleOutputColor(FOREGROUND_RED);
+	SetConsoleOutputColor(FOREGROUND_GREEN);
 	BOOL bReplacedAtLeastOnce;
 	BOOL bResult = RemoveApiSets(FileFullPath, pApiSetSchema, _T("MSVCR14X.dll"), strNewVcpDllsName, _T("CONCRT14X.dll"), strNewMfcDllsName, bReplacedAtLeastOnce);
 	if (!bResult)
@@ -370,6 +394,7 @@ BOOL DirectoryEnumProc_Internal(LPCTSTR FileFullPath, LPCTSTR cFileName, LPARAM 
 		DWORD dwError = GetLastError();
 		if (dwError != ERROR_BAD_EXE_FORMAT && dwError != ERROR_INVALID_MODULETYPE)
 		{
+			SetConsoleOutputColor(FOREGROUND_RED);
 			_tprintf(_T("RemoveApiSets failed! %s %s\r\n"), (LPCTSTR)Error(dwError), &FileFullPath[nRootDirLength]);
 		}
 	}
