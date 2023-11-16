@@ -44,7 +44,7 @@ CString Error(int ErrorNumber = 0);
 //一共有16种文字颜色，16种背景颜色，组合有256种。传入的值应当小于256
 #define CONSOLE_DEFAULT_COLOR_ATTRIBUTES (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
 BOOL SetConsoleInputColor(WORD wAttributes);
-//注意：默认情况下控制台输出设备和控制台错误设备都是活动控制台屏幕缓存区即CONOUT$，所以改变控制台输出设备或者错误设备中的任意一个颜色时，实际上也改变了另外一个控制台设备的颜色
+//注意：默认情况下控制台输出设备和控制台错误设备都是活动控制台屏幕缓存区即CONOUT$，所以这种情况下改变控制台输出设备或者错误设备中的任意一个颜色时，实际上也改变了另外一个控制台设备的颜色
 //参考链接：https://learn.microsoft.com/en-us/windows/console/getstdhandle
 BOOL SetConsoleOutputColor(WORD wAttributes);
 BOOL SetConsoleErrorColor(WORD wAttributes);
